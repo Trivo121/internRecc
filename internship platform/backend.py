@@ -9,7 +9,7 @@ import logging
 # ----------------------- Configuration -----------------------
 # NOTE: You've asked to keep the API key inside this file.
 # For production / shared repositories, move this to environment variables or a secrets manager.
-GEMINI_API_KEY = "AIzaSyA83lSdFOBprXCSb7XwzSQptnnkYZ-hRnk"
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Configure logging
@@ -752,3 +752,4 @@ if __name__ == '__main__':
             st.markdown(f"**{r['title']}** at *{r['company']}* — Match: {r.get('match_score')}")
             st.text(r['ai_analysis'].get('skill_alignment', ''))
             st.write('---')
+
