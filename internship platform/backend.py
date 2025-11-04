@@ -6,9 +6,6 @@ import os
 import re
 import logging
 
-# ----------------------- Configuration -----------------------
-# NOTE: You've asked to keep the API key inside this file.
-# For production / shared repositories, move this to environment variables or a secrets manager.
 GEMINI_API_KEY = "Enter your gemini api key"
 genai.configure(api_key=GEMINI_API_KEY)
 
@@ -19,30 +16,24 @@ logger = logging.getLogger(__name__)
 
 class InternshipMatcher:
     def __init__(self):
-        # We store a list of preferred model names and attempt to use them at runtime.
         self.model_names = [
             'gemini-1.5-flash',
             'gemini-1.5-pro',
             'gemini-pro-latest'
         ]
 
-        # Keep a model object if the library exposes one in your installed version
         self.model = None
         self.model_name = None
 
-        # Try to initialize a model object if the client supports it. If it fails,
-        # we'll fall back to calling the library generically at runtime.
         for mn in self.model_names:
             try:
-                # Some library versions may provide a GenerativeModel class
                 self.model = genai.GenerativeModel(mn)
                 self.model_name = mn
                 st.info(f"Using Gemini model object: {mn}")
                 break
             except Exception:
-                # Not available or failed — we'll try the next
                 self.model = None
-                self.model_name = mn  # still keep a candidate name
+                self.model_name = mn  
 
         if self.model is None:
             st.info("No model object available locally; will attempt API calls with candidate model names.")
@@ -452,11 +443,9 @@ class InternshipMatcher:
           2) genai.generate_text / genai.generate if available
           3) fallback to raising an exception so caller can use local fallback logic
         """
-        # 1) If we have a model object and it exposes a generate_content method
         if self.model is not None and hasattr(self.model, 'generate_content'):
             try:
                 resp = self.model.generate_content(prompt)
-                # Many wrappers return an object with .text — try to extract
                 text = getattr(resp, 'text', None)
                 if text is None:
                     text = str(resp)
@@ -464,10 +453,8 @@ class InternshipMatcher:
             except Exception as e:
                 logger.warning(f"Model object generate_content failed: {e}")
 
-        # 2) Try calling top-level genai APIs using candidate model names
         for mn in self.model_names:
             try:
-                # try a few method names depending on the library version
                 if hasattr(genai, 'generate_text'):
                     resp = genai.generate_text(model=mn, prompt=prompt)
                     text = getattr(resp, 'text', None) or str(resp)
@@ -477,7 +464,6 @@ class InternshipMatcher:
                     text = getattr(resp, 'text', None) or str(resp)
                     return text.strip()
                 else:
-                    # Last resort: try calling genai directly and hope for a meaningful __str__
                     resp = genai.__dict__.get('generate')(model=mn, prompt=prompt) if 'generate' in genai.__dict__ else None
                     if resp is not None:
                         text = getattr(resp, 'text', None) or str(resp)
@@ -556,7 +542,6 @@ Be specific and helpful. Focus on practical advice.
 
     def _create_fallback_analysis(self, user_profile: str, internship: Dict[str, Any]) -> Dict[str, Any]:
         """Create a fallback analysis when AI fails"""
-        # Robustly extract user skills from profile text
         user_skills: List[str] = []
         m = re.search(r"Technical Skills:\s*(.*)", user_profile)
         if m:
@@ -564,7 +549,6 @@ Be specific and helpful. Focus on practical advice.
 
         match_score = self.simple_skill_match(user_skills, internship['skills'])
 
-        # Specific matching skills for description
         matching_skills = []
         for user_skill in user_skills:
             for req_skill in internship['skills']:
@@ -614,7 +598,7 @@ Be specific and helpful. Focus on practical advice.
     def simple_skill_match(self, user_skills: List[str], required_skills: List[str]) -> float:
         """Enhanced skill matching algorithm"""
         if not user_skills or not required_skills:
-            return 30.0  # Default score when no skills to compare
+            return 30.0  
 
         user_skills_lower = [skill.lower().strip() for skill in user_skills]
         required_skills_lower = [skill.lower().strip() for skill in required_skills]
@@ -623,18 +607,14 @@ Be specific and helpful. Focus on practical advice.
         for req_skill in required_skills_lower:
             best_match = 0.0
             for user_skill in user_skills_lower:
-                # Exact match
                 if req_skill == user_skill:
                     best_match = 1.0
                     break
-                # Partial match
                 elif req_skill in user_skill or user_skill in req_skill:
                     best_match = max(best_match, 0.8)
-                # Technology family matches
                 elif any(tech in req_skill and tech in user_skill for tech in 
                         ['python', 'java', 'react', 'node', 'sql', 'css', 'html', 'js', 'api', 'data']):
                     best_match = max(best_match, 0.6)
-                # Programming language generalization
                 elif any(lang in req_skill for lang in ['python', 'java', 'javascript', 'c++', 'c#']) and \
                      any(lang in user_skill for lang in ['python', 'java', 'javascript', 'c++', 'c#']):
                     best_match = max(best_match, 0.4)
@@ -642,7 +622,7 @@ Be specific and helpful. Focus on practical advice.
             matches += best_match
 
         score = (matches / len(required_skills)) * 100
-        return min(100, max(0, score))  # Ensure score is between 0-100
+        return min(100, max(0, score))  
 
     def get_recommendations(self, user_info: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Get AI-ranked internship recommendations"""
@@ -659,7 +639,6 @@ Be specific and helpful. Focus on practical advice.
             user_profile = self.create_user_profile(user_info)
             recommendations: List[Dict[str, Any]] = []
 
-            # Show progress bar
             progress_bar = st.progress(0.0)
             status_text = st.empty()
 
@@ -669,10 +648,8 @@ Be specific and helpful. Focus on practical advice.
                 try:
                     status_text.text(f'Analyzing {internship["title"]} at {internship["company"]}... ({i+1}/{total_internships})')
 
-                    # Get AI analysis
                     analysis = self.analyze_match(user_profile, internship)
 
-                    # Combine internship data with analysis
                     recommendation = {
                         **internship,
                         'ai_analysis': analysis,
@@ -683,7 +660,6 @@ Be specific and helpful. Focus on practical advice.
 
                 except Exception as e:
                     logger.exception(f"Error analyzing {internship.get('title', 'Unknown')}: {str(e)}")
-                    # Add with default analysis
                     recommendation = {
                         **internship,
                         'ai_analysis': self._create_fallback_analysis(user_profile, internship),
@@ -693,7 +669,6 @@ Be specific and helpful. Focus on practical advice.
 
                 progress_bar.progress((i + 1) / total_internships)
 
-            # Sort by match score (highest first)
             recommendations.sort(key=lambda x: x.get('match_score', 0), reverse=True)
 
             status_text.text('Analysis complete!')
@@ -708,7 +683,6 @@ Be specific and helpful. Focus on practical advice.
             return []
 
 
-# Global instance
 matcher = InternshipMatcher()
 
 
@@ -721,7 +695,6 @@ def get_internship_recommendations(user_info: Dict[str, Any]) -> List[Dict[str, 
         return []
 
 
-# If this file executed directly, simple Streamlit UI to test
 if __name__ == '__main__':
     st.title("Internship Matcher (Demo)")
 
@@ -752,6 +725,7 @@ if __name__ == '__main__':
             st.markdown(f"**{r['title']}** at *{r['company']}* — Match: {r.get('match_score')}")
             st.text(r['ai_analysis'].get('skill_alignment', ''))
             st.write('---')
+
 
 
 
